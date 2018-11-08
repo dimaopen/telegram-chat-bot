@@ -1,0 +1,33 @@
+Partition Key;      Sorting Key;                    Data                                    Attributes
+
+
+room-${room name}     ${room name}                     Name                                 numberOfChatters:10 (user num)
+
+usr-${user id}        usr                          ${room name}                             nick; room; real name
+
+
+
+msg-${message id}     msg-${room name}              2017-01-17T14:22:11.234                 msg-text; nick; ${user id}
+
+
+
+
+
+
+
+
+
+
+
+
+
+Queries
+1. Get messages by room id
+2. Get latest messages by room id
+3. Get list of rooms
+4. Get list of users by room id
+5. Get message by id
+6. Get list of all users
+7. Get user by id
+
+

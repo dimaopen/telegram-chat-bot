@@ -1,0 +1,23 @@
+{
+  "update_id": 533041639,
+  "message": {
+    "message_id": 66,
+    "from": {
+      "id": 450000099,
+      "is_bot": false,
+      "first_name": "Ivanhoe",
+      "last_name": "Stevenson",
+      "username": "ivanhoeuser",
+      "language_code": "ru-ru"
+    },
+    "chat": {
+      "id": 450000099,
+      "first_name": "Ivanhoe",
+      "last_name": "Stevenson",
+      "username": "ivanhoeuser",
+      "type": "private"
+    },
+    "date": 1540473265,
+    "text": "The message text I received"
+  }
+}

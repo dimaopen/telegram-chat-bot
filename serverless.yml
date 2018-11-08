@@ -1,0 +1,23 @@
+service: chat-tg-service
+
+frameworkVersion: ">=1.2.0 <2.0.0"
+
+provider:
+  name: aws
+  runtime: java8
+
+package:
+  artifact: ./target/universal/tg-bot-0.1.zip
+
+functions:
+  tg-web-hook:
+    handler: com.dopenkov.aws.BotHandler::handleRequest
+    environment:
+      TG_BOT_TOKEN: "${self:custom.tgBotToken}"
+    events:
+    - http:
+        path: hook
+        method: post
+
+custom:
+  tgBotToken: ${file(./env.yml):tgBotToken}

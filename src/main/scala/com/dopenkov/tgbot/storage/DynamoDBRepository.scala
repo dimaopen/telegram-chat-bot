@@ -90,14 +90,14 @@ object User {
   private def getRoomName(chatter: Chatter) = chatter.room.getOrElse("No room")
 
   def apply(chatter: Chatter): User = new User(s"usr-${chatter.id}", data = getRoomName(chatter), nick = chatter.nick,
-    state = chatter.state.toString, realName = chatter.realName)
+    state = chatter.state.toString, realName = chatter.realName, chatId = chatter.chatId)
 }
 
-case class User(id: String, data: String, nick: String, realName: String, state: String, sortKey: String = "usr") {
+case class User(id: String, data: String, nick: String, realName: String, state: String, chatId: Long, sortKey: String = "usr") {
 
 
   def toChatter: Chatter = Chatter(this.id.substring(4), this.nick, ChatterState.withName(this.state), this.realName,
-    toRoomOption)
+    toRoomOption, this.chatId)
 
   private def toRoomOption: Option[String] = if (this.data == "No room") None else Some(this.data)
 }

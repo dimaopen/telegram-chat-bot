@@ -3,15 +3,16 @@ package com.dopenkov.tgbot
 import java.util.Locale
 
 import cats.effect.IO
+import cats.implicits._
 import cats.kernel.Comparison.EqualTo
 import cats.kernel.Order
-import cats.syntax.option._
 import com.dopenkov.tgbot.model.Helper._
 import com.dopenkov.tgbot.model.{Chatter, ChatterState, MessageType, Room}
 import com.dopenkov.tgbot.storage.Repository
 import com.pengrad.telegrambot.model.request.{InlineKeyboardButton, InlineKeyboardMarkup}
-import com.pengrad.telegrambot.model.{CallbackQuery, Chat, Message, Update}
+import com.pengrad.telegrambot.model.{CallbackQuery, Message, Update}
 import com.pengrad.telegrambot.request.SendMessage
+import com.pengrad.telegrambot.response.SendResponse
 import org.apache.logging.log4j.{LogManager, Logger}
 
 import scala.util.Random
@@ -27,40 +28,40 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
   def toLocale(str: String): Locale = Locale.forLanguageTag(str)
 
 
-  def newEvent(upd: Update): IO[Any] = {
+  def newEvent(upd: Update): IO[List[SendResponse]] = {
     val user = upd.from()
 
     val userId = user.id().toString
-    val chatter: IO[Option[Chatter]] = repository.findChatter(userId)
-    chatter flatMap {
-      case None => handleNew(upd)
-      case Some(ch) => handleExisting(upd, ch)
-    } flatMap { op =>
-      op.map(m => telegram.execute(m)).getOrElse(IO.unit)
-    }
+
+    for {
+      chatter <- repository.findChatter(userId)
+      messages <- chatter match {
+        case None => handleNew(upd)
+        case Some(ch) => handleExisting(upd, ch)
+      }
+      r <- messages.map(telegram.execute).sequence
+    } yield r
   }
 
-  private def updateAndSend(newChatter: Chatter, text: String)(implicit chat: Chat) = {
+  private def updateAndSend(newChatter: Chatter, text: String) = {
     repository.updateChatter(newChatter)
-      .map(ch => new SendMessage(chat.id, text).some)
+      .map(ch => List(new SendMessage(newChatter.chatId, text)))
   }
 
-  def handleExisting(upd: Update, ch: Chatter): IO[Option[SendMessage]] = {
-
+  def handleExisting(upd: Update, ch: Chatter): IO[List[SendMessage]] = {
     upd.content match {
       case (msg: Message, MessageType.Message) =>
-        implicit val chat: Chat = msg.chat()
         val command = getCommand(msg)
         (command, ch.state) match {
           case (Some(BotCommand.Nick), _) => updateAndSend(ch.copy(state = ChatterState.NickChanging),
             s"Your nick is ${ch.nick}. Enter a new nick or /cancel")
           case (Some(BotCommand.Cancel), _) => repository.updateChatter(ch.copy(state = ChatterState.General))
-            .map(_ => None)
+            .map(_ => List())
           case (Some(BotCommand.Rooms), _) =>
             (for {
               _ <- repository.updateChatter(ch.copy(state = ChatterState.General))
               rooms <- repository.listRooms()
-            } yield rooms).map(rooms => createSelectRoomMessage(msg.chat.id, rooms, ch.room).some)
+            } yield rooms).map(rooms => createSelectRoomMessage(msg.chat.id, rooms, ch.room).toSEL)
           case (Some(BotCommand.Who), _) =>
             ch.room match {
               case None => updateAndSend(ch.copy(state = ChatterState.General), "You are not in a room. Use /rooms command.")
@@ -68,7 +69,7 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
                 (for {
                   _ <- repository.updateChatter(ch.copy(state = ChatterState.General))
                   chatters <- repository.listChatters(roomName)
-                } yield chatters) map (chatters => createChattersMessage(msg.chat.id, chatters, roomName).some)
+                } yield chatters) map (chatters => createChattersMessage(msg.chat.id, chatters, roomName).toSEL)
             }
           case (Some(BotCommand.Exit), _) =>
             for {
@@ -78,20 +79,24 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
             } yield msg
           case (None, ChatterState.NickChanging) => updateAndSend(ch.copy(nick = msg.text(), state = ChatterState.General),
             s"Nick changed to ${msg.text()}")
-          case (None, _) => IO.pure(new SendMessage(msg.chat().id(), s"NEW MSG: " + msg.text()).some) //todo send to everyone in a room
+          case (None, _) => ch.room match {
+            case Some(room) => repository.listChatters(room).map(chatters =>
+              chatters.filterNot(_ == ch).map(rm => new SendMessage(rm.chatId, s"NEW MSG: " + msg.text())))
+            case None => new SendMessage(msg.chat().id(), "You are not in a room. Use /rooms command.").toIOSEL
+          }
         }
       case (clb: CallbackQuery, _) =>
         handleCallbackQuery(ch, clb)
-      case _ => IO.pure(None)
+      case _ => IO.pure(List())
     }
   }
 
-  private def handleCallbackQuery(ch: Chatter, clb: CallbackQuery): IO[Option[SendMessage]] = {
+  private def handleCallbackQuery(ch: Chatter, clb: CallbackQuery): IO[List[SendMessage]] = {
     //callback query are for entering to a room
     import cats.kernel.instances.string.catsKernelStdOrderForString
     val currentRoom = ch.room.getOrElse("")
     Order[String].comparison(currentRoom, clb.data()) match {
-      case EqualTo => IO.pure(new SendMessage(clb.message().chat().id(), s"You are already in room '$currentRoom'").some)
+      case EqualTo => new SendMessage(clb.message().chat().id(), s"You are already in room '$currentRoom'").toIOSEL
       case _ =>
         repository.findRoom(clb.data()).flatMap {
           case Some(room) =>
@@ -99,22 +104,22 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
               currentRoom <- ch.room.map(repository.findRoom).getOrElse(IO.pure(None))
               _ <- currentRoom.map(repository.incNumberOfChatters(_, -1)).getOrElse(IO.unit)
               _ <- repository.incNumberOfChatters(room, 1)
-              msg <- updateAndSend(ch.copy(room = room.name.some),
-                s"You are in the room '${room.name}' now.\nUse /who to see who there are.")(clb.message().chat())
+              msg <- updateAndSend(ch.copy(room = Some(room.name)),
+                s"You are in the room '${room.name}' now.\nUse /who to see who there are.")
             } yield msg
-          case None => IO.pure(new SendMessage(clb.message().chat().id(), s"Room not found: ${clb.data()}'").some)
+          case None => new SendMessage(clb.message().chat().id(), s"Room not found: ${clb.data()}'").toIOSEL
         }
     }
   }
 
-  def handleNew(upd: Update): IO[Option[SendMessage]] = {
+  def handleNew(upd: Update): IO[List[SendMessage]] = {
     upd.content match {
       case (msg: Message, MessageType.Message) =>
         val nick = createNick
         updateAndSend(Chatter(msg.from().id().toString, nick, ChatterState.General,
-          s"${msg.from().firstName()} ${msg.from().lastName()}", None),
-          s"Help message here\n your nick is: $nick")(msg.chat())
-      case _ => IO.pure(None) //if not a message it means something wrong, don't react
+          s"${msg.from().firstName()} ${msg.from().lastName()}", None, msg.chat().id()),
+          s"Help message here\n your nick is: $nick")
+      case _ => IO.pure(List()) //if not a message it means something wrong, don't react
     }
   }
 
@@ -149,6 +154,11 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
       case _ =>
         new SendMessage(chatId, s"You are in room $currentRoom. There are\n" + chatters.map(_.nick).mkString("\n"))
     }
+  }
+
+  implicit class AnyList[A](val a: A) {
+    def toSEL = List(a)
+    def toIOSEL: IO[List[A]] = IO.pure(List(a))
   }
 
 }

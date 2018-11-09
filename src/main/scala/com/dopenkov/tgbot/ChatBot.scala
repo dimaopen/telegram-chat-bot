@@ -1,5 +1,6 @@
 package com.dopenkov.tgbot
 
+import java.time.Instant
 import java.util.Locale
 
 import cats.effect.IO
@@ -7,7 +8,7 @@ import cats.implicits._
 import cats.kernel.Comparison.EqualTo
 import cats.kernel.Order
 import com.dopenkov.tgbot.model.Helper._
-import com.dopenkov.tgbot.model.{Chatter, ChatterState, MessageType, Room}
+import com.dopenkov.tgbot.model._
 import com.dopenkov.tgbot.storage.Repository
 import com.pengrad.telegrambot.model.request.{InlineKeyboardButton, InlineKeyboardMarkup}
 import com.pengrad.telegrambot.model.{CallbackQuery, Message, Update}
@@ -31,7 +32,7 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
   def newEvent(upd: Update): IO[List[SendResponse]] = {
     val user = upd.from()
 
-    val userId = user.id().toString
+    val userId = user.id()
 
     for {
       chatter <- repository.findChatter(userId)
@@ -80,8 +81,13 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
           case (None, ChatterState.NickChanging) => updateAndSend(ch.copy(nick = msg.text(), state = ChatterState.General),
             s"Nick changed to ${msg.text()}")
           case (None, _) => ch.room match {
-            case Some(room) => repository.listChatters(room).map(chatters =>
-              chatters.filterNot(_ == ch).map(rm => new SendMessage(rm.chatId, s"NEW MSG: " + msg.text())))
+            case Some(room) =>
+              for {
+                _ <- repository.newMessage(
+                  model.ChatMessage(s"${msg.chat().id().toString}_${msg.messageId().toString}", ch.id, Instant.now(), ch.nick,
+                    room, msg.text))
+                chatters <- repository.listChatters(room)
+              } yield chatters.filterNot(_ == ch).map(rm => new SendMessage(rm.chatId, s"NEW MSG: " + msg.text()))
             case None => new SendMessage(msg.chat().id(), "You are not in a room. Use /rooms command.").toIOSEL
           }
         }
@@ -116,7 +122,7 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
     upd.content match {
       case (msg: Message, MessageType.Message) =>
         val nick = createNick
-        updateAndSend(Chatter(msg.from().id().toString, nick, ChatterState.General,
+        updateAndSend(Chatter(msg.from().id(), nick, ChatterState.General,
           s"${msg.from().firstName()} ${msg.from().lastName()}", None, msg.chat().id()),
           s"Help message here\n your nick is: $nick")
       case _ => IO.pure(List()) //if not a message it means something wrong, don't react

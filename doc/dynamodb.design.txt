@@ -7,7 +7,7 @@ usr-${user id}        usr                          ${room name}                 
 
 
 
-msg-${message id}     msg-${room name}              2017-01-17T14:22:11.234                 msg-text; nick; ${user id}
+msg-${message id}     msg-${room name}              2017-01-17T14:22:11.234                 msg-text; nick; ${user id}; room
 
 
 

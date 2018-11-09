@@ -1,7 +1,7 @@
 package com.dopenkov.tgbot
 
 import cats.effect.IO
-import com.dopenkov.tgbot.model.{Chatter, Room}
+import com.dopenkov.tgbot.model.{ChatMessage, Chatter, Room}
 import com.dopenkov.tgbot.storage.Repository
 import com.google.gson.Gson
 import com.pengrad.telegrambot.model.Update
@@ -23,7 +23,7 @@ class ChatBotTest extends FlatSpec {
     val chatBot = new ChatBot(this, this)
     val upd = loadMessage("incoming-messages/update-message-01.json")
     chatBot.newEvent(upd).unsafeRunSync()
-    assert(findChatter("450000099").unsafeRunSync().get.realName == "Ivanhoe Stevenson")
+    assert(findChatter(450000099).unsafeRunSync().get.realName == "Ivanhoe Stevenson")
   }
 
   "ChatBot" should "handle nick changing" in new Tele with Repo {
@@ -31,7 +31,7 @@ class ChatBotTest extends FlatSpec {
     chatBot.newEvent(loadUpdateWithText("/start")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("/nick")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("Karlsen")).unsafeRunSync()
-    assert(findChatter("450000099").unsafeRunSync().get.nick == "Karlsen")
+    assert(findChatter(450000099).unsafeRunSync().get.nick == "Karlsen")
     val msg = lastMessage
     assert(msg.getParameters.get("text") == "Nick changed to Karlsen")
   }
@@ -45,7 +45,7 @@ class ChatBotTest extends FlatSpec {
     chatBot.newEvent(loadUpdateWithText("/nick")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("/cancel")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("Karlsen")).unsafeRunSync()
-    assert(findChatter("450000099").unsafeRunSync().get.nick == initialNick)
+    assert(findChatter(450000099).unsafeRunSync().get.nick == initialNick)
   }
 
   private val gson = new Gson()
@@ -69,7 +69,7 @@ class ChatBotTest extends FlatSpec {
   }
 
   trait Repo extends Repository {
-    val storage: mutable.Map[String, Chatter] = mutable.Map.empty
+    val storage: mutable.Map[Int, Chatter] = mutable.Map.empty
 
 
     override def updateChatter(chatter: Chatter): IO[Chatter] = IO {
@@ -77,9 +77,11 @@ class ChatBotTest extends FlatSpec {
       chatter
     }
 
-    override def findChatter(userId: String): IO[Option[Chatter]] = IO.pure(storage.get(userId))
+    override def findChatter(userId: Int): IO[Option[Chatter]] = IO.pure(storage.get(userId))
 
     override def listChatters(room: String): IO[List[Chatter]] = ???
+
+    override def newMessage(msg: ChatMessage): IO[ChatMessage] = ???
 
     private val room1 = Room("Newbies", 10)
     private val room2 = Room("Advanced", 100)

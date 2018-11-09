@@ -50,8 +50,9 @@ class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
     queryIndex[MyRoom, Room]('sortKey -> "room", _.toRoom)
   }
 
-  private def queryIndex[A: DynamoFormat, B](query: Query[_], f: A => B): IO[List[B]] = {
-    val gsi1 = Table[A]("Chat").index("sortKey-data-index")
+  private def queryIndex[A: DynamoFormat, B](query: Query[_], f: A => B, limit: Int = -1): IO[List[B]] = {
+    val ind = Table[A]("Chat").index("sortKey-data-index")
+    val gsi1 = if (limit < 0) ind else ind.limit(limit)
     IO {
       Scanamo.exec(client)(gsi1.query(query))
     } map {
@@ -100,6 +101,10 @@ class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
           msg
       }.getOrElse(msg)
     }
+  }
+
+  override def findMessages(room: String, since: Instant, limit: Int): IO[List[ChatMessage]] = {
+    queryIndex[MyMessage, ChatMessage]('sortKey -> s"msg-$room" and 'data > since.toString, _.toMessage)
   }
 }
 

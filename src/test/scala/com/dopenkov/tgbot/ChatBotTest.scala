@@ -1,5 +1,7 @@
 package com.dopenkov.tgbot
 
+import java.time.Instant
+
 import cats.effect.IO
 import com.dopenkov.tgbot.model.{ChatMessage, Chatter, Room}
 import com.dopenkov.tgbot.storage.Repository
@@ -82,6 +84,8 @@ class ChatBotTest extends FlatSpec {
     override def listChatters(room: String): IO[List[Chatter]] = ???
 
     override def newMessage(msg: ChatMessage): IO[ChatMessage] = ???
+
+    override def findMessages(room: String, since: Instant, limit: Int): IO[List[ChatMessage]] = ???
 
     private val room1 = Room("Newbies", 10)
     private val room2 = Room("Advanced", 100)

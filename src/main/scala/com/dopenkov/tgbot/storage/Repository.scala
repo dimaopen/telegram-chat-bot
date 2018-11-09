@@ -1,7 +1,10 @@
 package com.dopenkov.tgbot.storage
 
+import java.time.Instant
+
 import cats.effect.IO
-import com.dopenkov.tgbot.model.{Chatter, ChatMessage, Room}
+import com.dopenkov.tgbot.model.{ChatMessage, Chatter, Room}
+import com.google.gson.annotations.Since
 
 /**
   *
@@ -21,6 +24,8 @@ trait Repository {
   def incNumberOfChatters(room: Room, inc: Int): IO[Room]
 
   def newMessage(msg: ChatMessage): IO[ChatMessage]
+
+  def findMessages(room: String, since: Instant, limit: Int): IO[List[ChatMessage]]
 }
 
 

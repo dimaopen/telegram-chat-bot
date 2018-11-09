@@ -1,6 +1,7 @@
 package com.dopenkov.tgbot
 
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 import cats.effect.IO
@@ -71,6 +72,15 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
                   _ <- repository.updateChatter(ch.copy(state = ChatterState.General))
                   chatters <- repository.listChatters(roomName)
                 } yield chatters) map (chatters => createChattersMessage(msg.chat.id, chatters, roomName).toSEL)
+            }
+          case (Some(BotCommand.Messages), _) =>
+            ch.room match {
+              case None => updateAndSend(ch.copy(state = ChatterState.General), "You are not in a room. Use /rooms command.")
+              case Some(roomName) =>
+                (for {
+                  _ <- repository.updateChatter(ch.copy(state = ChatterState.General))
+                  messages <- repository.findMessages(roomName, Instant.now().minus(12, ChronoUnit.HOURS), 20)
+                } yield messages) map (createMessagesMessage(msg.chat.id, _).toSEL)
             }
           case (Some(BotCommand.Exit), _) =>
             for {
@@ -166,6 +176,18 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
     }
   }
 
+  private def createMessagesMessage(chatId: Long, messages: List[ChatMessage]): SendMessage = {
+    messages match {
+      case List() => new SendMessage(chatId, s"No messages recently")
+      case _ =>
+        new SendMessage(chatId, messages.map(presentation).mkString("\n"))
+    }
+  }
+
+  private def presentation(chatMessage: ChatMessage) = {
+    s"${chatMessage.timestamp} ${chatMessage.nick}: ${chatMessage.text}"
+  }
+
   implicit class AnyList[A](val a: A) {
     def toSEL = List(a)
 
@@ -188,7 +210,9 @@ object BotCommand {
 
   case object Who extends CommandVal
 
-  val values = Seq(Nick, Cancel, Rooms, Who, Exit)
+  case object Messages extends CommandVal
+
+  val values = Seq(Nick, Cancel, Rooms, Who, Messages, Exit)
 
   def fromString(cmd: String): Option[CommandVal] = BotCommand.values.find(_.toString.equalsIgnoreCase(cmd))
 }

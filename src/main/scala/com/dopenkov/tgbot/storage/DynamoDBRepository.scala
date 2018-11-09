@@ -14,12 +14,13 @@ import org.apache.logging.log4j.{LogManager, Logger}
   *
   * @author Dmitry Openkov
   */
-class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
-  val logger: Logger = LogManager.getLogger(getClass)
+class DynamoDBRepository(client: AmazonDynamoDB, tableName: String) extends Repository {
+  private val logger: Logger = LogManager.getLogger(getClass)
+  private val gsi1Name = "sortKey-data-index"
 
   override def findChatter(userId: Int): IO[Option[Chatter]] = {
     IO {
-      Scanamo.exec(client)(Table[User]("Chat").get('id -> s"usr-$userId" and 'sortKey -> "usr"))
+      Scanamo.exec(client)(Table[User](tableName).get('id -> s"usr-$userId" and 'sortKey -> "usr"))
     } map {
       case Some(Right(user)) => Some(user.toChatter)
       case Some(Left(err)) =>
@@ -33,7 +34,7 @@ class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
     val user = User(chatter)
     IO {
       logger.info("Updating chatter: {}", user)
-      Scanamo.exec(client)(Table[User]("Chat").put(user)).map {
+      Scanamo.exec(client)(Table[User](tableName).put(user)).map {
         case Right(usr) => usr.toChatter
         case Left(err) =>
           logger.error("Error update user ({}): {}", chatter.id, err: Any)
@@ -51,7 +52,7 @@ class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
   }
 
   private def queryIndex[A: DynamoFormat, B](query: Query[_], f: A => B, limit: Int = -1): IO[List[B]] = {
-    val ind = Table[A]("Chat").index("sortKey-data-index")
+    val ind = Table[A](tableName).index(gsi1Name)
     val gsi1 = if (limit < 0) ind else ind.limit(limit)
     IO {
       Scanamo.exec(client)(gsi1.query(query))
@@ -68,7 +69,7 @@ class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
 
   override def findRoom(roomName: String): IO[Option[Room]] =
     IO {
-      Scanamo.exec(client)(Table[MyRoom]("Chat").get('id -> s"room-$roomName" and 'sortKey -> "room"))
+      Scanamo.exec(client)(Table[MyRoom](tableName).get('id -> s"room-$roomName" and 'sortKey -> "room"))
     } map {
       case Some(Right(myRoom)) => Some(myRoom.toRoom)
       case Some(Left(err)) =>
@@ -80,7 +81,7 @@ class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
   override def incNumberOfChatters(room: Room, inc: Int): IO[Room] = {
     val myRoom: MyRoom = new MyRoom(room)
     IO {
-      Scanamo.exec(client)(Table[MyRoom]("Chat")
+      Scanamo.exec(client)(Table[MyRoom](tableName)
         .update('id -> myRoom.id and 'sortKey -> myRoom.sortKey, add('numberOfChatters -> inc)))
     } flatMap {
       case Left(err) =>
@@ -94,7 +95,7 @@ class DynamoDBRepository(client: AmazonDynamoDB) extends Repository {
     val myMessage: MyMessage = MyMessage(msg)
     IO {
       logger.info("New chatMessage: {}", myMessage)
-      Scanamo.exec(client)(Table[MyMessage]("Chat").put(myMessage)).map {
+      Scanamo.exec(client)(Table[MyMessage](tableName).put(myMessage)).map {
         case Right(myMsg) => myMsg.toMessage
         case Left(err) =>
           logger.error("Error putting chatMessage ({}): {}", msg.id, err: Any)

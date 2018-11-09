@@ -16,10 +16,11 @@ import org.apache.logging.log4j.{LogManager, Logger, ThreadContext}
   * @author Dmitry Openkov
   */
 class BotHandler extends RequestHandler2 {
-  val logger: Logger = LogManager.getLogger(getClass)
-  val gson = new Gson()
+  private val logger: Logger = LogManager.getLogger(getClass)
+  private val gson = new Gson()
   private val client: AmazonDynamoDB = AmazonDynamoDBClientBuilder.standard.build
-  val bot = new ChatBot(new PengradTelegram(sys.env("TG_BOT_TOKEN")), new DynamoDBRepository(client))
+  private val bot = new ChatBot(new PengradTelegram(sys.env("TG_BOT_TOKEN")),
+    new DynamoDBRepository(client, sys.env("TABLE_NAME")))
 
   def handleRequest(httpEvent: util.Map[String, Object], context: Context): ApiGatewayResponse = {
     ThreadContext.push("test")

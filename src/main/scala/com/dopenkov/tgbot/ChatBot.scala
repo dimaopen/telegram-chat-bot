@@ -121,10 +121,12 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
   def handleNew(upd: Update): IO[List[SendMessage]] = {
     upd.content match {
       case (msg: Message, MessageType.Message) =>
-        val nick = createNick
-        updateAndSend(Chatter(msg.from().id(), nick, ChatterState.General,
-          s"${msg.from().firstName()} ${msg.from().lastName()}", None, msg.chat().id()),
-          s"Help message here\n your nick is: $nick")
+        for {
+          nick <- createNick
+          res <- updateAndSend(Chatter(msg.from().id(), nick, ChatterState.General,
+            s"${msg.from().firstName()} ${msg.from().lastName()}", None, msg.chat().id()),
+            s"Help message here\n your nick is: $nick")
+        } yield res
       case _ => IO.pure(List()) //if not a message it means something wrong, don't react
     }
   }
@@ -137,8 +139,10 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
     }
   }
 
-  private def createNick = {
-    "n" + random.nextPrintableChar() + random.nextPrintableChar()
+  private def createNick: IO[String] = {
+    IO {
+      "n" + random.nextPrintableChar() + random.nextPrintableChar()
+    }
   }
 
   private def createSelectRoomMessage(chatId: Long, rooms: List[Room], currentRoom: Option[String]): SendMessage = {
@@ -164,6 +168,7 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
 
   implicit class AnyList[A](val a: A) {
     def toSEL = List(a)
+
     def toIOSEL: IO[List[A]] = IO.pure(List(a))
   }
 

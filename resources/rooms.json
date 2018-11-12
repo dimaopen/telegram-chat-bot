@@ -1,0 +1,40 @@
+{
+  "dev-tg-chat": [
+    {
+      "PutRequest": {
+        "Item": {
+          "id": {
+            "S": "room-advanced"
+          },
+          "sortKey": {
+            "S": "room"
+          },
+          "data": {
+            "S": "advanced"
+          },
+          "numberOfChatters": {
+            "N": "0"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "id": {
+            "S": "room-newbies"
+          },
+          "sortKey": {
+            "S": "room"
+          },
+          "data": {
+            "S": "newbies"
+          },
+          "numberOfChatters": {
+            "N": "0"
+          }
+        }
+      }
+    }
+  ]
+}

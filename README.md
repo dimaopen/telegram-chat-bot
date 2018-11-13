@@ -1,7 +1,7 @@
 # AWS Telegram "Anonymous chat" Bot in Scala
 
 ## Description
-Telegram bot allows to chat the telegram users anonymously. It is written in Scala and supposed to be hosted on AWS 
+Telegram bot allows the telegram users to chat anonymously. It is written in Scala and supposed to be hosted on AWS 
 as a lambda function and using DynamoDB as a storage.
 
 ## How to build and deploy

@@ -50,11 +50,21 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
       .map(ch => List(new SendMessage(newChatter.chatId, text)))
   }
 
+  def isValid(nick: String): Boolean = nick.matches("[a-zA-Z0-9]{2,}")
+
   def handleExisting(upd: Update, ch: Chatter): IO[List[SendMessage]] = {
     upd.content match {
       case (msg: Message, MessageType.Message) =>
         val command = getCommand(msg)
         (command, ch.state) match {
+          case (_, ChatterState.NickChanging) if !command.contains(BotCommand.Cancel) =>
+            val newNick = msg.text.trim
+            if (isValid(newNick)) {
+              updateAndSend(ch.copy(nick = newNick, state = ChatterState.General), s"Nick changed to $newNick")
+            } else {
+              new SendMessage(msg.chat().id(), s"Invalid nick: $newNick; Your nick is ${ch.nick}. " +
+                s"Enter a new nick or /cancel").toIOSEL
+            }
           case (Some(BotCommand.Nick), _) => updateAndSend(ch.copy(state = ChatterState.NickChanging),
             s"Your nick is ${ch.nick}. Enter a new nick or /cancel")
           case (Some(BotCommand.Cancel), _) => repository.updateChatter(ch.copy(state = ChatterState.General))
@@ -66,7 +76,7 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
             } yield rooms).map(rooms => createSelectRoomMessage(msg.chat.id, rooms, ch.room).toSEL)
           case (Some(BotCommand.Who), _) =>
             ch.room match {
-              case None => updateAndSend(ch.copy(state = ChatterState.General), "You are not in a room. Use /rooms command.")
+              case None => new SendMessage(msg.chat().id(), "You are not in a room. Use /rooms command.").toIOSEL
               case Some(roomName) =>
                 (for {
                   _ <- repository.updateChatter(ch.copy(state = ChatterState.General))
@@ -75,7 +85,7 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
             }
           case (Some(BotCommand.Messages), _) =>
             ch.room match {
-              case None => updateAndSend(ch.copy(state = ChatterState.General), "You are not in a room. Use /rooms command.")
+              case None => new SendMessage(msg.chat().id(), "You are not in a room. Use /rooms command.").toIOSEL
               case Some(roomName) =>
                 (for {
                   _ <- repository.updateChatter(ch.copy(state = ChatterState.General))
@@ -88,8 +98,6 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
               _ <- currentRoom.map(repository.incNumberOfChatters(_, -1)).getOrElse(IO.unit)
               msg <- updateAndSend(ch.copy(room = None, state = ChatterState.General), "You left the chat")
             } yield msg
-          case (None, ChatterState.NickChanging) => updateAndSend(ch.copy(nick = msg.text(), state = ChatterState.General),
-            s"Nick changed to ${msg.text()}")
           case (None, _) => ch.room match {
             case Some(room) =>
               for {
@@ -97,7 +105,7 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
                   model.ChatMessage(s"${msg.chat().id().toString}_${msg.messageId().toString}", ch.id, Instant.now(), ch.nick,
                     room, msg.text))
                 chatters <- repository.listChatters(room)
-              } yield chatters.filterNot(_ == ch).map(rm => new SendMessage(rm.chatId, s"NEW MSG: " + msg.text()))
+              } yield chatters.filterNot(_ == ch).map(rm => new SendMessage(rm.chatId, s"${ch.nick}: ${msg.text()}"))
             case None => new SendMessage(msg.chat().id(), "You are not in a room. Use /rooms command.").toIOSEL
           }
         }

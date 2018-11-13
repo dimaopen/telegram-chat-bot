@@ -38,16 +38,32 @@ class ChatBotTest extends FlatSpec {
     assert(msg.getParameters.get("text") == "Nick changed to Karlsen")
   }
 
+  "ChatBot" should "handle bad nicks" in new Tele with Repo {
+    val chatBot = new ChatBot(this, this)
+    chatBot.newEvent(loadUpdateWithText("/start")).unsafeRunSync()
+    val msg = lastMessage
+    val initialNick = getInitialNick(msg)
+    chatBot.newEvent(loadUpdateWithText("/nick")).unsafeRunSync()
+    chatBot.newEvent(loadUpdateWithText("$Karlsen")).unsafeRunSync()
+    val last = lastMessage
+    assert(last.getParameters.get("text").asInstanceOf[String].startsWith("Invalid nick:"))
+    assert(findChatter(450000099).unsafeRunSync().get.nick == initialNick)
+  }
+
   "ChatBot" should "not change nick if user cancelled" in new Tele with Repo {
     val chatBot = new ChatBot(this, this)
     chatBot.newEvent(loadUpdateWithText("/start")).unsafeRunSync()
     val msg = lastMessage
-    val initialNick = "your nick is: ([^)]+)".r.findFirstMatchIn(msg.getParameters.get("text").toString)
-      .map(m => m.group(1)).getOrElse("Not found")
+    val initialNick = getInitialNick(msg)
     chatBot.newEvent(loadUpdateWithText("/nick")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("/cancel")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("Karlsen")).unsafeRunSync()
     assert(findChatter(450000099).unsafeRunSync().get.nick == initialNick)
+  }
+
+  private def getInitialNick(msg: SendMessage) = {
+    "your nick is: ([^)]+)".r.findFirstMatchIn(msg.getParameters.get("text").toString)
+      .map(m => m.group(1)).getOrElse("Not found")
   }
 
   private val gson = new Gson()

@@ -17,15 +17,12 @@ import com.pengrad.telegrambot.request.SendMessage
 import com.pengrad.telegrambot.response.SendResponse
 import org.apache.logging.log4j.{LogManager, Logger}
 
-import scala.util.Random
-
 /**
   *
   * @author Dmitry Openkov
   */
-class ChatBot(telegram: Telegram, val repository: Repository) {
-  private val logger: Logger = LogManager.getLogger(getClass)
-  private lazy val random = Random
+class ChatBot(telegram: Telegram, repository: Repository, nameGenerator: NameGenerator) {
+  private lazy val logger: Logger = LogManager.getLogger(getClass)
 
   def toLocale(str: String): Locale = Locale.forLanguageTag(str)
 
@@ -140,10 +137,16 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
     upd.content match {
       case (msg: Message, MessageType.Message) =>
         for {
-          nick <- createNick
-          res <- updateAndSend(Chatter(msg.from().id(), nick, ChatterState.General,
-            s"${msg.from().firstName()} ${msg.from().lastName()}", None, msg.chat().id()),
-            s"Help message here\n your nick is: $nick")
+          nick <- nameGenerator.createNickname
+          res <- nick match {
+            case Left(err) =>
+              logger.error("Cannot create a nick: {}", err)
+              new SendMessage(msg.chat().id(), "Cannot create a nick for you. Please try later.").toIOSEL
+            case Right(nick) =>
+              updateAndSend(Chatter(msg.from().id(), nick, ChatterState.General,
+                s"${msg.from().firstName()} ${msg.from().lastName()}", None, msg.chat().id()),
+                s"Help message here\n your nick is: $nick")
+          }
         } yield res
       case _ => IO.pure(List()) //if not a message it means something wrong, don't react
     }
@@ -154,12 +157,6 @@ class ChatBot(telegram: Telegram, val repository: Repository) {
     msg.text() match {
       case p(cmd) => BotCommand.fromString(cmd)
       case _ => None
-    }
-  }
-
-  private def createNick: IO[String] = {
-    IO {
-      "n" + random.nextPrintableChar() + random.nextPrintableChar()
     }
   }
 

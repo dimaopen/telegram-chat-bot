@@ -24,6 +24,8 @@ libraryDependencies += "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.11.1
 libraryDependencies += "com.github.pengrad" % "java-telegram-bot-api" % "4.1.0"
 //dynamodb lib
 libraryDependencies += "com.gu" %% "scanamo" % "1.0.0-M6"
+//http client
+libraryDependencies += "com.squareup.okhttp3" % "okhttp" % "3.11.+"
 
 libraryDependencies += "org.typelevel" %% "cats-effect" % "1.0.0"
 

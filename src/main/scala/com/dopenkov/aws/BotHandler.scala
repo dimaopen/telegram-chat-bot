@@ -5,7 +5,7 @@ import java.util
 import com.amazonaws.handlers.RequestHandler2
 import com.amazonaws.services.dynamodbv2.{AmazonDynamoDB, AmazonDynamoDBClientBuilder}
 import com.amazonaws.services.lambda.runtime.Context
-import com.dopenkov.tgbot.{ChatBot, PengradTelegram}
+import com.dopenkov.tgbot.{ChatBot, NameGenerator, PengradTelegram}
 import com.dopenkov.tgbot.storage.DynamoDBRepository
 import com.google.gson.Gson
 import com.pengrad.telegrambot.model.Update
@@ -20,7 +20,7 @@ class BotHandler extends RequestHandler2 {
   private val gson = new Gson()
   private val client: AmazonDynamoDB = AmazonDynamoDBClientBuilder.standard.build
   private val bot = new ChatBot(new PengradTelegram(sys.env("TG_BOT_TOKEN")),
-    new DynamoDBRepository(client, sys.env("TABLE_NAME")))
+    new DynamoDBRepository(client, sys.env("TABLE_NAME")), new NameGenerator(gson))
 
   def handleRequest(httpEvent: util.Map[String, Object], context: Context): ApiGatewayResponse = {
     ThreadContext.push("test")

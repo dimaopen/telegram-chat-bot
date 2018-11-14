@@ -22,14 +22,14 @@ import scala.io.Source
 class ChatBotTest extends FlatSpec {
 
   "ChatBot" should "create a new chatter" in new Tele with Repo {
-    val chatBot = new ChatBot(this, this)
+    val chatBot = createChatBot(this)
     val upd = loadMessage("incoming-messages/update-message-01.json")
     chatBot.newEvent(upd).unsafeRunSync()
     assert(findChatter(450000099).unsafeRunSync().get.realName == "Ivanhoe Stevenson")
   }
 
   "ChatBot" should "handle nick changing" in new Tele with Repo {
-    val chatBot = new ChatBot(this, this)
+    val chatBot = createChatBot(this)
     chatBot.newEvent(loadUpdateWithText("/start")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("/nick")).unsafeRunSync()
     chatBot.newEvent(loadUpdateWithText("Karlsen")).unsafeRunSync()
@@ -39,7 +39,7 @@ class ChatBotTest extends FlatSpec {
   }
 
   "ChatBot" should "handle bad nicks" in new Tele with Repo {
-    val chatBot = new ChatBot(this, this)
+    val chatBot = createChatBot(this)
     chatBot.newEvent(loadUpdateWithText("/start")).unsafeRunSync()
     val msg = lastMessage
     val initialNick = getInitialNick(msg)
@@ -51,7 +51,7 @@ class ChatBotTest extends FlatSpec {
   }
 
   "ChatBot" should "not change nick if user cancelled" in new Tele with Repo {
-    val chatBot = new ChatBot(this, this)
+    val chatBot = createChatBot(this)
     chatBot.newEvent(loadUpdateWithText("/start")).unsafeRunSync()
     val msg = lastMessage
     val initialNick = getInitialNick(msg)
@@ -84,6 +84,10 @@ class ChatBotTest extends FlatSpec {
     val upd: Update = loadMessage("incoming-messages/update-message-01.json")
     upd.message().setV("text", text)
     upd
+  }
+
+  private def createChatBot(helper: Tele with Repo): ChatBot = {
+    new ChatBot(helper, helper, new NameGenerator(new Gson()))
   }
 
   trait Repo extends Repository {
